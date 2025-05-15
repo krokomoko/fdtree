@@ -197,20 +197,20 @@ func (fdt *FDTree) feet(data [][]float64, indexes []int, order []Position) {
 	}
 }
 
-func (fdt *FDTree) predict(data []float64) float64 {
+func (fdt *FDTree) Predict(data []float64) float64 {
 	var mult float64
-	classesValues := make([]float64, len(fdt.parameters[fdt.cInd].Words))
+	wordsMu := make([]float64, len(fdt.parameters[fdt.cInd].Words))
 
-	for classInd := 0; classInd < len(fdt.parameters[fdt.cInd].Words); classInd++ {
+	for wordInd := 0; wordInd < len(fdt.parameters[fdt.cInd].Words); wordInd++ {
 		for leafInd := 0; leafInd < len(fdt.p); leafInd++ {
 			mult = 1
 			for _, position := range fdt.order[leafInd] {
 				mult *= fdt.parameters[position.parameter].Words[position.word].mu(data[position.parameter])
 			}
-			classesValues[classInd] += fdt.p[leafInd][classInd] * mult
+			wordsMu[wordInd] += fdt.p[leafInd][wordInd] * mult
 		}
 	}
 
-	result, _ := fdt.parameters[fdt.cInd].value(classesValues)
+	result, _ := fdt.parameters[fdt.cInd].value(wordsMu)
 	return result
 }
