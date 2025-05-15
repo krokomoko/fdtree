@@ -3,7 +3,6 @@ package fdtree
 import (
 	"fmt"
 	"slices"
-	"sort"
 )
 
 // WordType
@@ -65,30 +64,28 @@ type Parameter struct {
 
 func NewParameter(data []float64, wordsCount int) Parameter {
 	var (
-		wordElementCount = len(data) / wordsCount
-		list             = make([]float64, len(data))
-		words            = []Word{}
+		min       = slices.Min(data)
+		max       = slices.Max(data)
+		vPerWord  = (max - min) / float64(wordsCount)
+		vPerWord2 = vPerWord / 2.0
+		words     = make([]Word, wordsCount)
 	)
+	var _min, _middle float64
 
-	copy(list, data)
-	sort.Float64s(list)
-
-	for i := 0; i < wordsCount; i++ {
-		subList := list[i*wordElementCount : (i+1)*wordElementCount]
-		sum := __sum(subList)
-		min := slices.Min(subList)
-		max := slices.Max(subList)
-		middle := sum / float64(wordElementCount)
-		words = append(words, Word{
-			min:    min,
-			max:    max,
+	for wordInd := 0; wordInd < wordsCount; wordInd++ {
+		_min = min + float64(wordInd)*vPerWord
+		_middle = _min + vPerWord2
+		words[wordInd] = Word{
+			min:    _min,
+			max:    _min + vPerWord,
 			kLeft:  0.0,
 			kRight: 0.0,
-			middle: middle,
-			cM:     middle,
+			middle: _middle,
+			cM:     _middle,
 			t:      Triangle,
-		})
+		}
 	}
+
 	words[0].t = TrapezeLeft
 	words[wordsCount-1].t = TrapezeRight
 
