@@ -104,37 +104,40 @@ func (fdt *FDTree) feet(data [][]float64, indexes []int, order []Position) {
 		indexesLen int = len(indexes)
 	)
 
+	var childsCount, mult float64
+
+	for _, row := range data {
+		mult = 1
+		for _, position := range order {
+			mult *= fdt.parameters[position.parameter].Words[position.word].mu(row[position.parameter])
+		}
+		childsCount += mult
+	}
+
+	if childsCount == 0 {
+		return
+	}
+
 	if indexesLen == 0 {
-		var n, mult float64
+		var ps = make([]float64, len(fdt.parameters[fdt.cInd].Words))
 
-		for _, row := range data {
-			mult = 1
-			for _, position := range order {
-				mult *= fdt.parameters[position.parameter].Words[position.word].mu(row[position.parameter])
-			}
-			n += mult
-		}
-
-		if n != 0.0 {
-			var ps = make([]float64, len(fdt.parameters[fdt.cInd].Words))
-
-			for i, word := range fdt.parameters[fdt.cInd].Words {
-				for _, row := range data {
-					mult = 1
-					for _, position := range order {
-						mult *= fdt.parameters[position.parameter].Words[position.word].mu(row[position.parameter])
-					}
-					ps[i] += word.mu(row[fdt.cInd]) * mult
+		for i, word := range fdt.parameters[fdt.cInd].Words {
+			for _, row := range data {
+				mult = 1
+				for _, position := range order {
+					mult *= fdt.parameters[position.parameter].Words[position.word].mu(row[position.parameter])
 				}
-				ps[i] /= n
+				ps[i] += word.mu(row[fdt.cInd]) * mult
 			}
-
-			fdt.p = append(fdt.p, ps)
-
-			var _order = make([]Position, len(order))
-			copy(_order, order)
-			fdt.order = append(fdt.order, _order)
+			ps[i] /= childsCount
 		}
+
+		fdt.p = append(fdt.p, ps)
+
+		var _order = make([]Position, len(order))
+		copy(_order, order)
+		fdt.order = append(fdt.order, _order)
+
 		return
 
 	} else if indexesLen == 1 {
