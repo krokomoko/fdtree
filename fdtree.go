@@ -2,6 +2,8 @@ package fdtree
 
 import (
 	"math"
+
+	"github.com/krokomoko/fuzzy"
 )
 
 type __Position struct {
@@ -11,7 +13,7 @@ type __Position struct {
 
 type FDTree struct {
 	cInd       int
-	parameters []Parameter
+	parameters []fuzzy.Parameter
 	p          [][]float64
 	order      [][]__Position
 }
@@ -20,7 +22,7 @@ func NewFDTree(data [][]float64, wordsCount int) FDTree {
 	var (
 		columns    = len(data[0])
 		rows       = len(data)
-		parameters = make([]Parameter, columns)
+		parameters = make([]fuzzy.Parameter, columns)
 		values     = make([]float64, rows)
 	)
 
@@ -28,7 +30,7 @@ func NewFDTree(data [][]float64, wordsCount int) FDTree {
 		for j := 0; j < rows; j++ {
 			values[j] = data[j][i]
 		}
-		parameters[i] = NewParameter(values, wordsCount)
+		parameters[i] = fuzzy.NewParameter(values, wordsCount)
 	}
 
 	return FDTree{
@@ -178,19 +180,20 @@ func (fdt *FDTree) feet(data [][]float64, indexes []int, order []__Position, cc 
 }
 
 func (fdt *FDTree) Predict(data []float64) float64 {
-	var mult float64
+	var mult, _mult float64
 	wordsMu := make([]float64, len(fdt.parameters[fdt.cInd].Words))
 
 	for wordInd := 0; wordInd < len(fdt.parameters[fdt.cInd].Words); wordInd++ {
 		for leafInd := 0; leafInd < len(fdt.p); leafInd++ {
 			mult = 1
 			for _, position := range fdt.order[leafInd] {
-				mult *= fdt.parameters[position.parameter].Words[position.word].mu(data[position.parameter])
+				_mult, _ = fdt.parameters[position.parameter].Words[position.word].Mu(data[position.parameter])
+				mult *= _mult
 			}
 			wordsMu[wordInd] += fdt.p[leafInd][wordInd] * mult
 		}
 	}
 
-	result, _ := fdt.parameters[fdt.cInd].value(wordsMu)
+	result, _ := fdt.parameters[fdt.cInd].Value(wordsMu)
 	return result
 }

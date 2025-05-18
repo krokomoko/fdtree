@@ -1,8 +1,10 @@
 package fdtree
 
+import "github.com/krokomoko/fuzzy"
+
 type __CData struct {
 	order []__Position
-	word  *Word
+	word  *fuzzy.Word
 }
 
 type __ConcrCalc struct {
@@ -48,7 +50,7 @@ func (cc *__ConcrCalc) close() {
 	}
 }
 
-func (cc *__ConcrCalc) calc(order []__Position, word ...*Word) float64 {
+func (cc *__ConcrCalc) calc(order []__Position, word ...*fuzzy.Word) float64 {
 	var (
 		sum   float64
 		cdata = __CData{
@@ -73,8 +75,8 @@ func (cc *__ConcrCalc) calc(order []__Position, word ...*Word) float64 {
 
 func __calc(fdt *FDTree, data [][]float64, input chan __CData, output chan float64) {
 	var (
-		cdata     __CData
-		mult, sum float64
+		cdata            __CData
+		mult, _mult, sum float64
 	)
 	for cdata = range input {
 		sum = 0
@@ -82,10 +84,12 @@ func __calc(fdt *FDTree, data [][]float64, input chan __CData, output chan float
 			mult = 1
 			for _, position := range cdata.order {
 				// TODO: гонка данных???
-				mult *= fdt.parameters[position.parameter].Words[position.word].mu(row[position.parameter])
+				_mult, _ = fdt.parameters[position.parameter].Words[position.word].Mu(row[position.parameter])
+				mult *= _mult
 			}
 			if cdata.word != nil {
-				mult *= cdata.word.mu(row[fdt.cInd])
+				_mult, _ = cdata.word.Mu(row[fdt.cInd])
+				mult *= _mult
 			}
 			sum += mult
 		}
