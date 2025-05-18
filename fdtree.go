@@ -4,7 +4,7 @@ import (
 	"math"
 )
 
-type Position struct {
+type __Position struct {
 	parameter int
 	word      int
 }
@@ -13,7 +13,7 @@ type FDTree struct {
 	cInd       int
 	parameters []Parameter
 	p          [][]float64
-	order      [][]Position
+	order      [][]__Position
 }
 
 func NewFDTree(data [][]float64, wordsCount int) FDTree {
@@ -35,25 +35,18 @@ func NewFDTree(data [][]float64, wordsCount int) FDTree {
 		cInd:       columns - 1,
 		parameters: parameters,
 		p:          [][]float64{},
-		order:      [][]Position{},
+		order:      [][]__Position{},
 	}
 }
 
-func (fdt *FDTree) entropy(data [][]float64, order []Position) (float64, float64) {
+func (fdt *FDTree) entropy(data [][]float64, order []__Position, cc *__ConcrCalc) (float64, float64) {
 	// общее количество элементов в узле
 	var nTotal float64
 
 	if len(order) == 0 {
 		nTotal = float64(len(data))
 	} else {
-		var mult float64
-		for _, row := range data {
-			mult = 1
-			for _, position := range order {
-				mult *= fdt.parameters[position.parameter].Words[position.word].mu(row[position.parameter])
-			}
-			nTotal += mult
-		}
+		nTotal = cc.calc(order)
 	}
 
 	if nTotal == 0.0 {
@@ -61,18 +54,10 @@ func (fdt *FDTree) entropy(data [][]float64, order []Position) (float64, float64
 	}
 
 	// подсчёт энтропии узла и возврат из функции
-	var r, p, mult float64
+	var r, p float64
 
 	for _, word := range fdt.parameters[fdt.cInd].Words {
-		p = 0
-		for _, row := range data {
-			mult = 1
-			for _, position := range order {
-				mult *= fdt.parameters[position.parameter].Words[position.word].mu(row[position.parameter])
-			}
-			p += word.mu(row[fdt.cInd]) * mult
-		}
-		p /= nTotal
+		p = cc.calc(order, &word) / nTotal
 		if p != 0.0 {
 			p = math.Log2(p)
 		}
@@ -82,10 +67,11 @@ func (fdt *FDTree) entropy(data [][]float64, order []Position) (float64, float64
 	return -1.0 * r, nTotal
 }
 
-func (fdt *FDTree) Feet(data [][]float64) {
+func (fdt *FDTree) Feet(data [][]float64, depth int, calcDiv ...int) {
 	var (
-		order   = []Position{}
-		indexes = make([]int, fdt.cInd)
+		order        = []__Position{}
+		indexes      = make([]int, fdt.cInd)
+		_calcDiv int = 1
 	)
 
 	for i := 0; i < fdt.cInd; i++ {
@@ -93,48 +79,38 @@ func (fdt *FDTree) Feet(data [][]float64) {
 	}
 
 	fdt.p = [][]float64{}
-	fdt.order = [][]Position{}
+	fdt.order = [][]__Position{}
 
-	fdt.feet(data, indexes, order)
+	if len(calcDiv) > 0 {
+		_calcDiv = calcDiv[0]
+	}
+	concurrentCalculator := __NewConcrCalc(fdt, data, _calcDiv)
+	defer concurrentCalculator.close()
+
+	fdt.feet(data, indexes, order, &concurrentCalculator, depth, 0)
 }
 
-func (fdt *FDTree) feet(data [][]float64, indexes []int, order []Position) {
+func (fdt *FDTree) feet(data [][]float64, indexes []int, order []__Position, cc *__ConcrCalc, maxDepth, depth int) {
 	var (
-		maxInd     int
-		indexesLen int = len(indexes)
+		maxInd      int
+		indexesLen  int = len(indexes)
+		childsCount     = cc.calc(order)
 	)
-
-	var childsCount, mult float64
-
-	for _, row := range data {
-		mult = 1
-		for _, position := range order {
-			mult *= fdt.parameters[position.parameter].Words[position.word].mu(row[position.parameter])
-		}
-		childsCount += mult
-	}
 
 	if childsCount == 0 {
 		return
 	}
 
-	if indexesLen == 0 {
+	if indexesLen == 0 || depth >= maxDepth {
 		var ps = make([]float64, len(fdt.parameters[fdt.cInd].Words))
 
 		for i, word := range fdt.parameters[fdt.cInd].Words {
-			for _, row := range data {
-				mult = 1
-				for _, position := range order {
-					mult *= fdt.parameters[position.parameter].Words[position.word].mu(row[position.parameter])
-				}
-				ps[i] += word.mu(row[fdt.cInd]) * mult
-			}
-			ps[i] /= childsCount
+			ps[i] = cc.calc(order, &word) / childsCount
 		}
 
 		fdt.p = append(fdt.p, ps)
 
-		var _order = make([]Position, len(order))
+		var _order = make([]__Position, len(order))
 		copy(_order, order)
 		fdt.order = append(fdt.order, _order)
 
@@ -145,7 +121,7 @@ func (fdt *FDTree) feet(data [][]float64, indexes []int, order []Position) {
 
 	} else {
 		// энтропия родительского узла
-		var eParent, nParent float64 = fdt.entropy(data, order)
+		var eParent, nParent float64 = fdt.entropy(data, order, cc)
 
 		// рассмотрение в отдельности каждого оставшегося параметра
 		var gains = make([]float64, len(indexes))
@@ -154,14 +130,14 @@ func (fdt *FDTree) feet(data [][]float64, indexes []int, order []Position) {
 			var (
 				gainSum, e, n float64
 				lnOrder       = len(order)
-				_order        = make([]Position, lnOrder+1)
+				_order        = make([]__Position, lnOrder+1)
 			)
 			copy(_order, order)
 
 			for i, parameterIndex := range indexes {
 				for wordInd := range fdt.parameters[parameterIndex].Words {
-					_order[lnOrder] = Position{parameter: parameterIndex, word: wordInd}
-					e, n = fdt.entropy(data, _order)
+					_order[lnOrder] = __Position{parameter: parameterIndex, word: wordInd}
+					e, n = fdt.entropy(data, _order, cc)
 					gainSum += e * n / nParent
 				}
 				gains[i] = eParent - gainSum
@@ -190,13 +166,14 @@ func (fdt *FDTree) feet(data [][]float64, indexes []int, order []Position) {
 
 	var (
 		lnOrder = len(order)
-		_order  = make([]Position, lnOrder+1)
+		_order  = make([]__Position, lnOrder+1)
+		_depth  = depth + 1
 	)
 	copy(_order, order)
 
 	for wordIndex := 0; wordIndex < len(fdt.parameters[indexes[maxInd]].Words); wordIndex++ {
-		_order[lnOrder] = Position{parameter: indexes[maxInd], word: wordIndex}
-		fdt.feet(data, newIndexes, _order)
+		_order[lnOrder] = __Position{parameter: indexes[maxInd], word: wordIndex}
+		fdt.feet(data, newIndexes, _order, cc, maxDepth, _depth)
 	}
 }
 
